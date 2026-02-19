@@ -299,6 +299,13 @@ public class EoBItemLibrary {
 
     public List<EoBItem> getItems() { return items; }
 
+    public String getItemName(int index) {
+        if (index < itemNames.size()) {
+            return itemNames.get(index);
+        }
+        return "Unknown (" + index + ")";
+    }
+
     public static void main(String[] args) {
         if (args.length < 1) {
             System.out.println("Usage: java EoBItemLibrary <path_to_game_data> [output_file|--extract-icons outdir|--html outdir]");

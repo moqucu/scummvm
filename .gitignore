@@ -309,3 +309,4 @@ __pycache__/
 # Analysis artifacts
 GEMINI.md
 devtools/analysis/eob/resources/
+*.class
