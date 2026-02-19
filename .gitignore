@@ -305,3 +305,7 @@ scummvm.prg
 
 #Ignore Python generated files
 __pycache__/
+
+# Analysis artifacts
+GEMINI.md
+devtools/analysis/eob/resources/
