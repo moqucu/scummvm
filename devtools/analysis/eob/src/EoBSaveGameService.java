@@ -262,6 +262,59 @@ public class EoBSaveGameService {
         }
     }
 
+    /**
+     * Debugging method to print all character-related information from the loaded savegame.
+     */
+    public void debugPrintCharacters(SaveGame save) {
+        System.out.println("=== Eye of the Beholder Character Debug Dump ===");
+        System.out.println("Party Location: Level " + save.currentLevel + ", Block " + save.currentBlock + ", Dir " + save.currentDirection);
+        System.out.println("Item in Hand Index: " + save.itemInHand);
+        
+        for (int i = 0; i < save.characters.size(); i++) {
+            EoBCharacter c = save.characters.get(i);
+            if (c.id == 0xFF || c.name.isEmpty()) continue;
+
+            System.out.println("\n--------------------------------------------------");
+            System.out.println("Slot " + (i + 1) + ": " + c.name + " (ID: " + c.id + ", Flags: 0x" + Integer.toHexString(c.flags) + ")");
+            System.out.println("Stats: STR: " + c.str + "/" + c.strMax + " (Ext: " + c.strExt + "/" + c.strExtMax + ")");
+            System.out.println("       INT: " + c.intel + "/" + c.intelMax + "  WIS: " + c.wis + "/" + c.wisMax);
+            System.out.println("       DEX: " + c.dex + "/" + c.dexMax + "  CON: " + c.con + "/" + c.conMax + "  CHA: " + c.cha + "/" + c.chaMax);
+            System.out.println("Combat: HP: " + c.hp + "/" + c.hpMax + "  AC: " + c.ac + "  Food: " + c.food);
+            System.out.println("Bio:    Race/Sex: " + c.raceSex + "  Class: " + c.cClass + "  Align: " + c.alignment + "  Portrait: " + c.portrait);
+            System.out.println("Levels: " + c.level[0] + "/" + c.level[1] + "/" + c.level[2]);
+            System.out.println("EXP:    " + c.exp[0] + " / " + c.exp[1] + " / " + c.exp[2]);
+            
+            System.out.println("Inventory:");
+            for (int j = 0; j < 27; j++) {
+                int itemIdx = c.inventory[j];
+                if (itemIdx < save.globalItems.size()) {
+                    EoBItemLibrary.EoBItem item = save.globalItems.get(itemIdx);
+                    String slotName = getSlotName(j);
+                    System.out.printf("  [%-10s] (Idx: %3d) %s / %s (Type: %d)%n", 
+                        slotName, itemIdx, item.unidName, item.idName, item.type);
+                }
+            }
+        }
+        System.out.println("\n================================================");
+    }
+
+    private String getSlotName(int slot) {
+        switch (slot) {
+            case 0: return "Right Hand";
+            case 1: return "Left Hand";
+            case 2: return "Head";
+            case 3: return "Body";
+            case 4: return "Neck";
+            case 5: return "Back";
+            case 6: return "Waist";
+            case 7: return "Bracers";
+            case 8: return "Right Ring";
+            case 9: return "Left Ring";
+            case 10: return "Boots";
+            default: return "Pack " + (slot - 10);
+        }
+    }
+
     public static void main(String[] args) {
         if (args.length < 2) {
             System.out.println("Usage: java EoBSaveGameService <game_path> <save_file>");
@@ -275,25 +328,7 @@ public class EoBSaveGameService {
             EoBSaveGameService service = new EoBSaveGameService(lib);
             SaveGame save = service.loadSaveGame(new File(args[1]));
             
-            System.out.println("EOB1 Save Game Loaded: " + args[1]);
-            System.out.println("Party Location: Level " + save.currentLevel + ", Block " + save.currentBlock);
-            
-            for (int i = 0; i < 6; i++) {
-                EoBCharacter c = save.characters.get(i);
-                if (c.id != 0xFF && !c.name.isEmpty()) {
-                    System.out.println("\nCharacter " + (i+1) + ": " + c.name);
-                    System.out.println("  HP: " + c.hp + "/" + c.hpMax + " | AC: " + c.ac);
-                    System.out.println("  Level: " + c.level[0] + "/" + c.level[1] + "/" + c.level[2]);
-                    System.out.println("  Inventory:");
-                    for (int j = 0; j < 27; j++) {
-                        int itemIdx = c.inventory[j];
-                        if (itemIdx < 500) {
-                            EoBItemLibrary.EoBItem item = save.globalItems.get(itemIdx);
-                            System.out.println("    Slot " + j + ": " + item.unidName + " (ID: " + itemIdx + ")");
-                        }
-                    }
-                }
-            }
+            service.debugPrintCharacters(save);
         } catch (Exception e) {
             e.printStackTrace();
         }
