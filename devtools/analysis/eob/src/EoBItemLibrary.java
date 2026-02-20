@@ -299,11 +299,25 @@ public class EoBItemLibrary {
 
     public List<EoBItem> getItems() { return items; }
 
-    public String getItemName(int index) {
-        if (index < itemNames.size()) {
-            return itemNames.get(index);
+    public String getItemName(int itemIndex) {
+        if (itemIndex >= 0 && itemIndex < items.size()) {
+            EoBItem it = items.get(itemIndex);
+            return it.unidName + (it.idName.isEmpty() ? "" : " / " + it.idName);
         }
-        return "Unknown (" + index + ")";
+        return "Unknown (" + itemIndex + ")";
+    }
+
+    /**
+     * Look up a name string directly by its index in the item name table.
+     * Use this when you have a nameUnid/nameId value from an EoBItem (from ITEM.DAT
+     * or from a savegame global item), since those values are indices into the name
+     * table, not into the prototype item list.
+     */
+    public String getItemNameString(int nameIndex) {
+        if (nameIndex >= 0 && nameIndex < itemNames.size()) {
+            return itemNames.get(nameIndex);
+        }
+        return "Unknown (" + nameIndex + ")";
     }
 
     public static void main(String[] args) {

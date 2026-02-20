@@ -77,32 +77,37 @@ public class EoBSaveGameService {
         ByteBuffer bb = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
         SaveGame save = new SaveGame();
 
-        // 1. Load 6 characters (Approx 314 bytes each in EOB1 DOS)
+        // 1. Load 6 characters (243 bytes each in EOB1 DOS)
+        // Byte breakdown: 1(id)+1(flags)+11(name)+14(stats)+1(hp)+1(hpMax)+7(bio)+
+        //                 3(level)+12(exp)+4(skip)+30(mageSpells)+30(clericSpells)+
+        //                 4(spellFlags)+54(inventory)+40(timers)+10(events)+
+        //                 4(effectsRemainder)+4(effectFlags)+1(damageTaken)+5(slotStatus)+6(skip) = 243
+        final int CHAR_RECORD_SIZE = 243;
         for (int i = 0; i < 6; i++) {
+            int charStart = i * CHAR_RECORD_SIZE;
+            bb.position(charStart);
+            
             EoBCharacter c = new EoBCharacter();
             c.id = bb.get() & 0xFF;
             c.flags = bb.get() & 0xFF;
             byte[] nameBytes = new byte[11];
             bb.get(nameBytes);
             c.name = new String(nameBytes, StandardCharsets.US_ASCII).trim();
-            c.str = bb.get();
-            c.strMax = bb.get();
-            c.strExt = bb.get();
-            c.strExtMax = bb.get();
-            c.intel = bb.get();
-            c.intelMax = bb.get();
-            c.wis = bb.get();
-            c.wisMax = bb.get();
-            c.dex = bb.get();
-            c.dexMax = bb.get();
-            c.con = bb.get();
-            c.conMax = bb.get();
-            c.cha = bb.get();
-            c.chaMax = bb.get();
             
+            // Stats (14 bytes)
+            c.str = bb.get(); c.strMax = bb.get();
+            c.strExt = bb.get(); c.strExtMax = bb.get();
+            c.intel = bb.get(); c.intelMax = bb.get();
+            c.wis = bb.get(); c.wisMax = bb.get();
+            c.dex = bb.get(); c.dexMax = bb.get();
+            c.con = bb.get(); c.conMax = bb.get();
+            c.cha = bb.get(); c.chaMax = bb.get();
+            
+            // HP (2 bytes for EOB1)
             c.hp = bb.get() & 0xFF;
             c.hpMax = bb.get() & 0xFF;
             
+            // Bio & Combat (7 bytes)
             c.ac = bb.get();
             c.disabledSlots = bb.get() & 0xFF;
             c.raceSex = bb.get() & 0xFF;
@@ -110,21 +115,29 @@ public class EoBSaveGameService {
             c.alignment = bb.get() & 0xFF;
             c.portrait = bb.get();
             c.food = bb.get() & 0xFF;
+            
+            // Levels & Exp (15 bytes)
             for (int j = 0; j < 3; j++) c.level[j] = bb.get() & 0xFF;
             for (int j = 0; j < 3; j++) c.exp[j] = bb.getInt() & 0xFFFFFFFFL;
             
-            bb.get(new byte[4]); // skip 4 bytes
+            bb.getInt(); // Skip 4 bytes (offset 51 to 55)
             
-            // Spells (EOB1 logic: 5 rows of 6 bytes for both mage and cleric)
-            for (int j = 0; j < 5; j++) bb.get(c.mageSpells, j * 10, 6);
-            for (int j = 0; j < 5; j++) bb.get(c.clericSpells, j * 10, 6);
+            // Spells: EoB1 stores 5 groups of 6 spells per level (30 bytes each).
+            // The in-memory array has slots for 10 spells per level; only the first 6
+            // of each group are stored in the file (matching C++ readOriginalSaveFile).
+            for (int ii = 0; ii < 5; ii++) bb.get(c.mageSpells, ii * 10, 6);
+            for (int ii = 0; ii < 5; ii++) bb.get(c.clericSpells, ii * 10, 6);
             
-            c.mageSpellsAvailableFlags = bb.getInt() & 0xFFFFFFFFL;
+            c.mageSpellsAvailableFlags = bb.getInt() & 0xFFFFFFFFL; // 4 bytes (total 119 bytes so far)
             
+            // Inventory: 27 x sint16LE (DOS little-endian). ByteBuffer is already in
+            // LITTLE_ENDIAN mode, so getShort() reads correctly.
+            bb.position(charStart + 119);
             for (int j = 0; j < 27; j++) {
                 c.inventory[j] = bb.getShort() & 0xFFFF;
             }
             
+            // Remaining (72 bytes)
             for (int j = 0; j < 10; j++) c.timers[j] = bb.getInt() & 0xFFFFFFFFL;
             bb.get(c.events);
             bb.get(c.effectsRemainder);
@@ -136,7 +149,8 @@ public class EoBSaveGameService {
             save.characters.add(c);
         }
 
-        // 2. Party Status
+        // 2. Party Status (at offset 1458 = 6 * 243)
+        bb.position(6 * CHAR_RECORD_SIZE);
         save.currentLevel = bb.getShort() & 0xFFFF;
         save.currentBlock = bb.getShort() & 0xFFFF;
         save.currentDirection = bb.getShort() & 0xFFFF;
@@ -144,8 +158,8 @@ public class EoBSaveGameService {
         save.hasTempDataFlags = bb.getShort() & 0xFFFF;
         save.partyEffectFlags = bb.getShort() & 0xFFFF;
 
-        // Skip _inf->loadState (In EOB1 DOS this skip seems to be around 28 bytes)
-        bb.position(bb.position() + 28); 
+        // Skip _inf->loadState: EOB1 DOS writes 12 x uint32LE flags + 1 x uint32LE = 52 bytes
+        bb.position(bb.position() + 52);
 
         // 3. Global Items (500 items)
         for (int i = 0; i < 500; i++) {
@@ -163,10 +177,11 @@ public class EoBSaveGameService {
             it.level = bb.get() & 0xFF;
             it.value = bb.get();
             
-            // Resolve names if itemLibrary is available
+            // nameUnid/nameId are indices into the item name string table, not into
+            // the prototype item list — use getItemNameString, not getItemName.
             if (itemLibrary != null) {
-                it.unidName = itemLibrary.getItemName(it.nameUnid);
-                it.idName = itemLibrary.getItemName(it.nameId);
+                it.unidName = itemLibrary.getItemNameString(it.nameUnid);
+                it.idName = itemLibrary.getItemNameString(it.nameId);
             }
             
             save.globalItems.add(it);
@@ -237,7 +252,7 @@ public class EoBSaveGameService {
         bb.putShort((short) save.hasTempDataFlags);
         bb.putShort((short) save.partyEffectFlags);
         
-        bb.position(bb.position() + 28); // skip inf state
+        bb.position(bb.position() + 52); // skip inf state (12 x uint32 + 1 x uint32 = 52 bytes)
 
         for (EoBItemLibrary.EoBItem it : save.globalItems) {
             bb.put((byte) it.nameUnid);
@@ -287,12 +302,21 @@ public class EoBSaveGameService {
             System.out.println("Inventory:");
             for (int j = 0; j < 27; j++) {
                 int itemIdx = c.inventory[j];
+                if (itemIdx == 0xFFFF || itemIdx == 0) continue; // Skip empty slots
+
+                // inventory[j] is an index into the savegame global items list.
+                // Each global item has already had its name resolved from the name table.
+                String itemName;
                 if (itemIdx < save.globalItems.size()) {
-                    EoBItemLibrary.EoBItem item = save.globalItems.get(itemIdx);
-                    String slotName = getSlotName(j);
-                    System.out.printf("  [%-10s] (Idx: %3d) %s / %s (Type: %d)%n", 
-                        slotName, itemIdx, item.unidName, item.idName, item.type);
+                    EoBItemLibrary.EoBItem globalItem = save.globalItems.get(itemIdx);
+                    itemName = (globalItem.unidName != null && !globalItem.unidName.isEmpty())
+                            ? globalItem.unidName : "Item #" + itemIdx;
+                } else {
+                    itemName = "Out-of-range index " + itemIdx;
                 }
+                String slotName = getSlotName(j);
+                System.out.printf("  [%-10s] (Idx: %3d) %s%n",
+                    slotName, itemIdx, itemName);
             }
         }
         System.out.println("\n================================================");
@@ -302,16 +326,18 @@ public class EoBSaveGameService {
         switch (slot) {
             case 0: return "Right Hand";
             case 1: return "Left Hand";
-            case 2: return "Head";
-            case 3: return "Body";
-            case 4: return "Neck";
-            case 5: return "Back";
-            case 6: return "Waist";
-            case 7: return "Bracers";
-            case 8: return "Right Ring";
-            case 9: return "Left Ring";
-            case 10: return "Boots";
-            default: return "Pack " + (slot - 10);
+            case 16: return "Quiver";
+            case 17: return "Body";
+            case 18: return "Belt 1";
+            case 19: return "Head";
+            case 20: return "Neck";
+            case 21: return "Boots";
+            case 22: return "Belt 2";
+            case 23: return "Belt 3";
+            case 24: return "Bracers";
+            case 25: return "Ring 1";
+            case 26: return "Ring 2";
+            default: return (slot >= 2 && slot <= 15) ? "Pack " + (slot - 1) : "Slot " + slot;
         }
     }
 
