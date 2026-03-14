@@ -259,7 +259,34 @@ bool Debugger::handleCommand(int argc, const char **argv, bool &keepRunning) {
 		"search", "wear", "yell", nullptr
 	};
 
-	if (g_context && g_context->_location) {
+	// Built-in framework commands safe to run before a game is loaded.
+	// "exit" and "quit" are handled separately: Ultima4 overrides those
+	// registrations with its vehicle-exit game command, so we must call
+	// detach() directly to close the console instead of going through
+	// the command map.
+	static const char *const BUILTIN_CMDS[] = {
+		"help", "openlog", "md5", "md5mac", "clear", "cls",
+		"exec", "debuglevel", "debugflag_list", "debugflag_enable",
+		"debugflag_disable", nullptr
+	};
+
+	if (!g_context || !g_context->_location) {
+		Common::String cmd(argv[0]);
+		if (cmd.equalsIgnoreCase("exit") || cmd.equalsIgnoreCase("quit")) {
+			detach();
+			keepRunning = false;
+			return true;
+		}
+		for (const char *const *c = BUILTIN_CMDS; *c; ++c) {
+			if (cmd.equalsIgnoreCase(*c))
+				return GUI::Debugger::handleCommand(argc, argv, keepRunning);
+		}
+		debugPrintf("No game loaded. Load a game before using game commands.\n");
+		keepRunning = true;
+		return true;
+	}
+
+	if (g_context->_location) {
 		int ctx = g_context->_location->_context;
 		if (ctx & (CTX_DUNGEON | CTX_COMBAT)) {
 			Common::String method = argv[0];

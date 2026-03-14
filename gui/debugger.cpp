@@ -298,8 +298,9 @@ bool Debugger::handleCommand(int argc, const char **argv, bool &result) {
 	assert(argc > 0);
 
 	if (_cmds.contains(argv[0])) {
-		assert(_cmds[argv[0]]);
-		result = (*_cmds[argv[0]])(argc, argv);
+		const Common::SharedPtr<Debuglet> &cmd = _cmds.getVal(argv[0]);
+		assert(cmd);
+		result = (*cmd)(argc, argv);
 		return true;
 	}
 
