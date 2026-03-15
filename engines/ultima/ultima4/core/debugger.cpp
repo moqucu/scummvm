@@ -438,6 +438,14 @@ bool Debugger::cmdCastSpell(int argc, const char **argv) {
 	if (player == -1)
 		return isDebuggerActive();
 
+	if (player < 0 || player >= g_context->_party->size()) {
+		print("Invalid player: %d (party has %d member%s, index 0-%d)",
+			player, g_context->_party->size(),
+			g_context->_party->size() == 1 ? "" : "s",
+			g_context->_party->size() - 1);
+		return isDebuggerActive();
+	}
+
 	// get the spell to cast
 	g_context->_stats->setView(STATS_MIXTURES);
 	printN("Spell: ");
@@ -744,6 +752,14 @@ bool Debugger::cmdGetChest(int argc, const char **argv) {
 		if (player == -1)
 			return isDebuggerActive();
 
+		if (player >= 0 && player >= g_context->_party->size()) {
+			print("Invalid player: %d (party has %d member%s, index 0-%d)",
+				player, g_context->_party->size(),
+				g_context->_party->size() == 1 ? "" : "s",
+				g_context->_party->size() - 1);
+			return isDebuggerActive();
+		}
+
 		if (obj)
 			g_context->_location->_map->removeObject(obj);
 		else {
@@ -976,6 +992,22 @@ bool Debugger::cmdNewOrder(int argc, const char **argv) {
 		return isDebuggerActive();
 	}
 
+	if (player1 >= g_context->_party->size()) {
+		print("Invalid player: %d (party has %d member%s, index 0-%d)",
+			player1, g_context->_party->size(),
+			g_context->_party->size() == 1 ? "" : "s",
+			g_context->_party->size() - 1);
+		return isDebuggerActive();
+	}
+
+	if (player2 >= g_context->_party->size()) {
+		print("Invalid player: %d (party has %d member%s, index 0-%d)",
+			player2, g_context->_party->size(),
+			g_context->_party->size() == 1 ? "" : "s",
+			g_context->_party->size() - 1);
+		return isDebuggerActive();
+	}
+
 	if (player1 == player2) {
 		print("%cWhat?%c", FG_GREY, FG_WHITE);
 		return isDebuggerActive();
@@ -1014,6 +1046,13 @@ bool Debugger::cmdOpenDoor(int argc, const char **argv) {
 bool Debugger::cmdParty(int argc, const char **argv) {
 	if (settings._enhancements && settings._enhancementsOptions._activePlayer) {
 		int player = (argc == 2) ? strToInt(argv[1]) - 1 : -1;
+		if (player >= 0 && player >= g_context->_party->size()) {
+			print("Invalid player: %d (party has %d member%s, index 1-%d)",
+				player + 1, g_context->_party->size(),
+				g_context->_party->size() == 1 ? "" : "s",
+				g_context->_party->size());
+			return isDebuggerActive();
+		}
 		gameSetActivePlayer(player);
 	} else {
 		print("%cBad command!%c", FG_GREY, FG_WHITE);
@@ -1061,6 +1100,14 @@ bool Debugger::cmdReadyWeapon(int argc, const char **argv) {
 		player = gameGetPlayer(true, false);
 		if (player == -1)
 			return isDebuggerActive();
+	}
+
+	if (player < 0 || player >= g_context->_party->size()) {
+		print("Invalid player: %d (party has %d member%s, index 0-%d)",
+			player, g_context->_party->size(),
+			g_context->_party->size() == 1 ? "" : "s",
+			g_context->_party->size() - 1);
+		return isDebuggerActive();
 	}
 
 	// get the weapon to use
@@ -1225,6 +1272,14 @@ bool Debugger::cmdStats(int argc, const char **argv) {
 		print("Ztats");
 	}
 
+	if (player < 0 || player >= g_context->_party->size()) {
+		print("Invalid player: %d (party has %d member%s, index 0-%d)",
+			player, g_context->_party->size(),
+			g_context->_party->size() == 1 ? "" : "s",
+			g_context->_party->size() - 1);
+		return isDebuggerActive();
+	}
+
 	// Reset the reagent spell mix menu by removing
 	// the menu highlight from the current item, and
 	// hiding reagents that you don't have
@@ -1290,6 +1345,14 @@ bool Debugger::cmdWearArmor(int argc, const char **argv) {
 		player = gameGetPlayer(true, false);
 		if (player == -1)
 			return isDebuggerActive();
+	}
+
+	if (player < 0 || player >= g_context->_party->size()) {
+		print("Invalid player: %d (party has %d member%s, index 0-%d)",
+			player, g_context->_party->size(),
+			g_context->_party->size() == 1 ? "" : "s",
+			g_context->_party->size() - 1);
+		return isDebuggerActive();
 	}
 
 	g_context->_stats->setView(STATS_ARMOR);
@@ -2035,7 +2098,7 @@ bool Debugger::cmdHelp(int argc, const char **argv) {
 		{ "search",          "search",                               "Search current location for secrets/items" },
 		{ "speed",           "speed <up|down|normal>",               "Adjust game speed" },
 		{ "spell",           "spell [player] [spell_letter]",        "Alias for cast" },
-		{ "stats",           "stats [player]",                       "Show character stat screen" },
+		{ "stats",           "stats [player]",                       "Show character stat screen; player index 0-7 (0=Avatar), max is party size - 1" },
 		{ "talk",            "talk",                                 "Talk to NPC in a direction (searches up to 2 tiles)" },
 		{ "use",             "use",                                  "Use an inventory item" },
 		{ "wear",            "wear [player]",                        "Equip armor for a party member" },
