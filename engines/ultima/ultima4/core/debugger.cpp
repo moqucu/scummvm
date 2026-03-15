@@ -205,6 +205,9 @@ Debugger::Debugger() : GUI::Debugger() {
 	registerCmd("down", WRAP_METHOD(Debugger, cmdDown));
 	registerCmd("virtue", WRAP_METHOD(Debugger, cmdVirtue));
 	registerCmd("wind", WRAP_METHOD(Debugger, cmdWind));
+
+	// Override base class help with our syntax-aware version
+	registerCmd("help", WRAP_METHOD(Debugger, cmdHelp));
 }
 
 Debugger::~Debugger() {
@@ -1995,6 +1998,138 @@ bool Debugger::cmdListTriggers(int argc, const char **argv) {
 	}
 
 	return isDebuggerActive();
+}
+
+bool Debugger::cmdHelp(int argc, const char **argv) {
+	struct HelpEntry {
+		const char *name;
+		const char *syntax;
+		const char *desc;
+	};
+	static const HelpEntry HELP_TABLE[] = {
+		// Game actions
+		{ "attack",          "attack <direction>",                   "Attack in a direction" },
+		{ "board",           "board",                                "Board ship/horse/balloon at current tile" },
+		{ "camp",            "camp",                                 "Camp/hole up (world map or dungeon, on foot only)" },
+		{ "cast",            "cast [player] [spell_letter]",         "Cast a spell; prompts interactively if args omitted" },
+		{ "climb",           "climb",                                "Climb portal or ascend balloon" },
+		{ "combat_speed",    "combat_speed <up|down|normal>",        "Adjust combat speed" },
+		{ "descend",         "descend",                              "Descend portal or land balloon" },
+		{ "enter",           "enter",                                "Enter portal (city, dungeon, etc.)" },
+		{ "exit",            "exit",                                 "Exit current transport, placing it on the map" },
+		{ "fire",            "fire",                                 "Fire ship cannon (broadside only)" },
+		{ "get",             "get [player]",                         "Open chest at current location" },
+		{ "ignite",          "ignite",                               "Light torch in dungeon" },
+		{ "interact",        "interact",                             "Context-smart action: boards/climbs/enters/searches as appropriate" },
+		{ "jimmy",           "jimmy",                                "Pick a lock in specified direction" },
+		{ "locate",          "locate",                               "Show sextant coordinates" },
+		{ "mix",             "mix",                                  "Open reagent mixing interface" },
+		{ "move",            "move <direction>",                     "Move avatar one tile" },
+		{ "open",            "open",                                 "Open door in a direction (on foot only)" },
+		{ "order",           "order",                                "Swap party member positions" },
+		{ "party",           "party [player]",                       "Set active player (enhanced mode only)" },
+		{ "pass",            "pass",                                 "Pass turn" },
+		{ "peer",            "peer",                                 "Use magic gem for overhead view" },
+		{ "quitAndSave",     "quitAndSave",                          "Save and quit" },
+		{ "ready",           "ready [player]",                       "Equip weapon for a party member" },
+		{ "search",          "search",                               "Search current location for secrets/items" },
+		{ "speed",           "speed <up|down|normal>",               "Adjust game speed" },
+		{ "spell",           "spell [player] [spell_letter]",        "Alias for cast" },
+		{ "stats",           "stats [player]",                       "Show character stat screen" },
+		{ "talk",            "talk",                                 "Talk to NPC in a direction (searches up to 2 tiles)" },
+		{ "use",             "use",                                  "Use an inventory item" },
+		{ "wear",            "wear [player]",                        "Equip armor for a party member" },
+		{ "yell",            "yell",                                 "Toggle horse speed (giddyup/whoa)" },
+		// Cheat / debug
+		{ "3d",              "3d",                                   "Toggle 3D dungeon view (dungeon only)" },
+		{ "abyss",           "abyss",                                "Teleport to Abyss final altar (7,7,7 floor 7), lights torch" },
+		{ "collisions",      "collisions",                           "Toggle collision detection on/off" },
+		{ "combat",          "combat",                               "Toggle random combat encounters on/off" },
+		{ "companions",      "companions",                           "Recruit all available companions" },
+		{ "destroy",         "destroy <direction>",                  "Destroy object/enemy one tile ahead" },
+		{ "destroy_creatures","destroy_creatures",                   "Instantly kill all creatures on current map" },
+		{ "down",            "down",                                 "Move down one dungeon floor; floors 0-7, fails at floor 7" },
+		{ "dungeon",         "dungeon <1-11>",                       "Teleport to dungeon 1-8 (main) or 9-11 (Deceit/Despise/Destard); world map only; enters at floor 7" },
+		{ "equipment",       "equipment",                            "Grant 8 of every equipment type, 99 consumable weapons" },
+		{ "flee",            "flee",                                 "End combat instantly, no karma penalty" },
+		{ "fullstats",       "fullstats",                            "Max all party stats (STR/DEX/INT 50, HP 800, XP 9999)" },
+		{ "gate",            "gate <1-8>",                           "Teleport to moongate for phase 1-8; world map only" },
+		{ "goto",            "goto <name|portal_num|label>",         "Teleport by location name, portal 1-24, or map label" },
+		{ "hunger",          "hunger",                               "Toggle party hunger on/off" },
+		{ "items",           "items",                                "Grant all key items: 99 torches/gems/keys, sextant, all stones/runes, 999900 food, 9999 gold" },
+		{ "karma",           "karma",                                "Display current karma values for all 8 virtues" },
+		{ "leave",           "leave",                                "Exit current location to parent map" },
+		{ "location",        "location [y-pair x-pair | y x]",        "Display or set coords; letter-pairs AA-PP map to 0-255 each axis; numeric: world map 0-255, dungeon 0-7" },
+		{ "lordbritish",     "lordbritish",                          "Teleport to Lord British's castle (19,8,0)" },
+		{ "mixtures",        "mixtures",                             "Grant 99 of all spell mixtures" },
+		{ "moon",            "moon [0-7]",                           "Advance to specific moon phase, or next phase if omitted" },
+		{ "opacity",         "opacity",                              "Toggle transparency effects" },
+		{ "overhead",        "overhead",                             "Toggle between normal/dungeon view and overhead gem view" },
+		{ "reagents",        "reagents",                             "Grant 99 of all spell reagents" },
+		{ "summon",          "summon <creature_name>",               "Spawn a named creature for combat" },
+		{ "teleport",        "teleport <name|portal_num|label>",     "Alias for goto; portal 1-24 on world map" },
+		{ "torch",           "torch",                                "Display remaining torch duration" },
+		{ "transport",       "transport <s|h|b> [direction]",        "Spawn ship (s), horse (h), or balloon (b) in a direction" },
+		{ "triggers",        "triggers",                             "List dungeon room triggers (coordinates + tile replacements); combat only" },
+		{ "up",              "up",                                   "Move up one dungeon floor; floors 0-7, exits dungeon at floor 0" },
+		{ "virtue",          "virtue [1-8]",                         "No arg: set all virtues to max. With arg: improve that virtue by 10" },
+		{ "wind",            "wind <direction|lock|l>",              "Set wind direction or toggle wind lock" },
+		{ nullptr, nullptr, nullptr }
+	};
+
+	if (argc < 2) {
+		static const int SYNTAX_WIDTH = 36;
+		static const int DESC_COL = SYNTAX_WIDTH + 1;
+		const int descWidth = getCharsPerLine() - DESC_COL;
+		const Common::String indent(DESC_COL, ' ');
+
+		debugPrintf("%-*s %s\n", SYNTAX_WIDTH, "Syntax", "Description");
+		debugPrintf("%-*s %s\n", SYNTAX_WIDTH, "------", "-----------");
+
+		for (const HelpEntry *e = HELP_TABLE; e->name; ++e) {
+			Common::String desc(e->desc);
+			bool firstLine = true;
+
+			while (!desc.empty()) {
+				Common::String chunk;
+				if ((int)desc.size() <= descWidth) {
+					chunk = desc;
+					desc.clear();
+				} else {
+					// Find last space within descWidth for a clean word break
+					int breakPos = descWidth;
+					while (breakPos > 0 && desc[breakPos] != ' ')
+						breakPos--;
+					if (breakPos == 0)
+						breakPos = descWidth; // no space found: hard break
+					chunk = desc.substr(0, breakPos);
+					// Skip the space itself when advancing
+					int skip = breakPos + (breakPos < (int)desc.size() && desc[breakPos] == ' ' ? 1 : 0);
+					desc = desc.substr(skip);
+				}
+
+				if (firstLine) {
+					debugPrintf("%-*s %s\n", SYNTAX_WIDTH, e->syntax, chunk.c_str());
+					firstLine = false;
+				} else {
+					debugPrintf("%s%s\n", indent.c_str(), chunk.c_str());
+				}
+			}
+		}
+		return true;
+	}
+
+	Common::String target(argv[1]);
+	for (const HelpEntry *e = HELP_TABLE; e->name; ++e) {
+		if (target.equalsIgnoreCase(e->name)) {
+			debugPrintf("Syntax:      %s\n", e->syntax);
+			debugPrintf("Description: %s\n", e->desc);
+			return true;
+		}
+	}
+
+	debugPrintf("No help available for '%s'.\n", argv[1]);
+	return true;
 }
 
 void Debugger::executeCommand(const Common::String &cmd) {

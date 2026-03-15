@@ -399,6 +399,11 @@ private:
 	 * Lists the triggers in a dungeon room
 	 */
 	bool cmdListTriggers(int argc, const char **argv);
+
+	/**
+	 * Overrides base help to support "help <command>" for syntax/description lookup
+	 */
+	bool cmdHelp(int argc, const char **argv);
 public:
 	bool _collisionOverride;
 	bool _disableHunger;
