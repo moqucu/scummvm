@@ -143,7 +143,7 @@ void Settings::synchronize(Shared::ConfSerializer &s) {
 	s.syncAsBool("shortcutCommands", _shortcutCommands, DEFAULT_SHORTCUT_COMMANDS);
 	s.syncAsBool("filterMoveMessages", _filterMoveMessages, DEFAULT_FILTER_MOVE_MESSAGES);
 	s.syncAsInt("battlespeed", _battleSpeed, DEFAULT_BATTLE_SPEED);
-	s.syncAsBool("enhancements", _enhancements, DEFAULT_ENHANCEMENTS);
+	s.syncAsBool("u4enhancements", _enhancements, DEFAULT_ENHANCEMENTS);
 	s.syncAsInt("gameCyclesPerSecond", _gameCyclesPerSecond, DEFAULT_CYCLES_PER_SECOND);
 	s.syncAsString("battleDiff", _battleDiff, DEFAULT_BATTLE_DIFFICULTY);
 	s.syncAsBool("validateXml", _validateXml, DEFAULT_VALIDATE_XML);
