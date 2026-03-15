@@ -2077,8 +2077,13 @@ bool Debugger::cmdHelp(int argc, const char **argv) {
 		{ nullptr, nullptr, nullptr }
 	};
 
-	if (argc < 2)
-		return GUI::Debugger::cmdHelp(argc, argv);
+	if (argc < 2) {
+		debugPrintf("%-36s %s\n", "Syntax", "Description");
+		debugPrintf("%-36s %s\n", "------", "-----------");
+		for (const HelpEntry *e = HELP_TABLE; e->name; ++e)
+			debugPrintf("%-36s %s\n", e->syntax, e->desc);
+		return true;
+	}
 
 	Common::String target(argv[1]);
 	for (const HelpEntry *e = HELP_TABLE; e->name; ++e) {
