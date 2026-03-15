@@ -2078,10 +2078,44 @@ bool Debugger::cmdHelp(int argc, const char **argv) {
 	};
 
 	if (argc < 2) {
-		debugPrintf("%-36s %s\n", "Syntax", "Description");
-		debugPrintf("%-36s %s\n", "------", "-----------");
-		for (const HelpEntry *e = HELP_TABLE; e->name; ++e)
-			debugPrintf("%-36s %s\n", e->syntax, e->desc);
+		static const int SYNTAX_WIDTH = 36;
+		static const int DESC_COL = SYNTAX_WIDTH + 1;
+		const int descWidth = getCharsPerLine() - DESC_COL;
+		const Common::String indent(DESC_COL, ' ');
+
+		debugPrintf("%-*s %s\n", SYNTAX_WIDTH, "Syntax", "Description");
+		debugPrintf("%-*s %s\n", SYNTAX_WIDTH, "------", "-----------");
+
+		for (const HelpEntry *e = HELP_TABLE; e->name; ++e) {
+			Common::String desc(e->desc);
+			bool firstLine = true;
+
+			while (!desc.empty()) {
+				Common::String chunk;
+				if ((int)desc.size() <= descWidth) {
+					chunk = desc;
+					desc.clear();
+				} else {
+					// Find last space within descWidth for a clean word break
+					int breakPos = descWidth;
+					while (breakPos > 0 && desc[breakPos] != ' ')
+						breakPos--;
+					if (breakPos == 0)
+						breakPos = descWidth; // no space found: hard break
+					chunk = desc.substr(0, breakPos);
+					// Skip the space itself when advancing
+					int skip = breakPos + (breakPos < (int)desc.size() && desc[breakPos] == ' ' ? 1 : 0);
+					desc = desc.substr(skip);
+				}
+
+				if (firstLine) {
+					debugPrintf("%-*s %s\n", SYNTAX_WIDTH, e->syntax, chunk.c_str());
+					firstLine = false;
+				} else {
+					debugPrintf("%s%s\n", indent.c_str(), chunk.c_str());
+				}
+			}
+		}
 		return true;
 	}
 
