@@ -44,10 +44,15 @@ Map *Object::getMap() {
 }
 
 void Object::remove() {
-	uint size = _maps.size();
+	// Copy _maps to a local list before iterating: the last removeObject call
+	// passes deleteObject=true which calls "delete this", destroying _maps
+	// while the loop is still in flight — a use-after-free that corrupts the
+	// iterator and causes a SIGSEGV on the next advance/compare.
+	Common::List<Map *> maps(_maps);
+	uint size = maps.size();
 	uint i = 0;
 
-	for (auto *map : _maps) {
+	for (auto *map : maps) {
 		if (i == size - 1)
 			map->removeObject(this);
 		else map->removeObject(this, false);

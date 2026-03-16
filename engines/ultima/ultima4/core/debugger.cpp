@@ -144,6 +144,8 @@ Debugger::Debugger() : GUI::Debugger() {
 	registerCmd("camp", WRAP_METHOD(Debugger, cmdCamp));
 	registerCmd("cast", WRAP_METHOD(Debugger, cmdCastSpell));
 	registerCmd("spell", WRAP_METHOD(Debugger, cmdCastSpell));
+	registerCmd("cure", WRAP_METHOD(Debugger, cmdCure));
+	registerCmd("heal", WRAP_METHOD(Debugger, cmdHeal));
 	registerCmd("climb", WRAP_METHOD(Debugger, cmdClimb));
 	registerCmd("descend", WRAP_METHOD(Debugger, cmdDescend));
 	registerCmd("enter", WRAP_METHOD(Debugger, cmdEnter));
@@ -179,6 +181,7 @@ Debugger::Debugger() : GUI::Debugger() {
 	registerCmd("companions", WRAP_METHOD(Debugger, cmdCompanions));
 	registerCmd("destroy", WRAP_METHOD(Debugger, cmdDestroy));
 	registerCmd("destroy_creatures", WRAP_METHOD(Debugger, cmdDestroyCreatures));
+	registerCmd("slay_creatures", WRAP_METHOD(Debugger, cmdSlayCreatures));
 	registerCmd("dungeon", WRAP_METHOD(Debugger, cmdDungeon));
 	registerCmd("equipment", WRAP_METHOD(Debugger, cmdEquipment));
 	registerCmd("exit", WRAP_METHOD(Debugger, cmdExit));
@@ -200,6 +203,7 @@ Debugger::Debugger() : GUI::Debugger() {
 	registerCmd("summon", WRAP_METHOD(Debugger, cmdSummon));
 	registerCmd("torch", WRAP_METHOD(Debugger, cmdTorch));
 	registerCmd("transport", WRAP_METHOD(Debugger, cmdTransport));
+	registerCmd("repair", WRAP_METHOD(Debugger, cmdRepairShip));
 	registerCmd("triggers", WRAP_METHOD(Debugger, cmdListTriggers));
 	registerCmd("up", WRAP_METHOD(Debugger, cmdUp));
 	registerCmd("down", WRAP_METHOD(Debugger, cmdDown));
@@ -710,6 +714,80 @@ bool Debugger::cmdFire(int argc, const char **argv) {
 	for (const auto &coords : path) {
 		if (fireAt(coords, true))
 			return isDebuggerActive();
+	}
+
+	return isDebuggerActive();
+}
+
+bool Debugger::cmdCure(int argc, const char **argv) {
+	if (argc == 2) {
+		// Cure a single player by index
+		int player = strToInt(argv[1]);
+		if (player < 0 || player >= g_context->_party->size()) {
+			print("Invalid player: %d (party has %d member%s, index 0-%d)",
+				player, g_context->_party->size(),
+				g_context->_party->size() == 1 ? "" : "s",
+				g_context->_party->size() - 1);
+			return isDebuggerActive();
+		}
+		PartyMember *pm = g_context->_party->member(player);
+		if (pm->getStatus() != STAT_POISONED) {
+			print("%s is not poisoned", pm->getName().c_str());
+		} else {
+			pm->heal(HT_CURE);
+			print("%s cured", pm->getName().c_str());
+		}
+	} else {
+		// Cure all poisoned party members
+		int cured = 0;
+		for (int i = 0; i < g_context->_party->size(); ++i) {
+			PartyMember *pm = g_context->_party->member(i);
+			if (pm->getStatus() == STAT_POISONED) {
+				pm->heal(HT_CURE);
+				print("%s cured", pm->getName().c_str());
+				++cured;
+			}
+		}
+		if (cured == 0)
+			print("No one is poisoned");
+	}
+
+	return isDebuggerActive();
+}
+
+bool Debugger::cmdHeal(int argc, const char **argv) {
+	if (argc == 2) {
+		// Heal a single player by index
+		int player = strToInt(argv[1]);
+		if (player < 0 || player >= g_context->_party->size()) {
+			print("Invalid player: %d (party has %d member%s, index 0-%d)",
+				player, g_context->_party->size(),
+				g_context->_party->size() == 1 ? "" : "s",
+				g_context->_party->size() - 1);
+			return isDebuggerActive();
+		}
+		PartyMember *pm = g_context->_party->member(player);
+		if (pm->getStatus() == STAT_DEAD) {
+			print("%s is dead and cannot be healed", pm->getName().c_str());
+		} else if (!pm->heal(HT_FULLHEAL)) {
+			print("%s is already at full health", pm->getName().c_str());
+		} else {
+			print("%s fully healed", pm->getName().c_str());
+		}
+	} else {
+		// Heal all living party members
+		int healed = 0;
+		for (int i = 0; i < g_context->_party->size(); ++i) {
+			PartyMember *pm = g_context->_party->member(i);
+			if (pm->getStatus() == STAT_DEAD) {
+				print("%s is dead and cannot be healed", pm->getName().c_str());
+			} else if (pm->heal(HT_FULLHEAL)) {
+				print("%s fully healed", pm->getName().c_str());
+				++healed;
+			}
+		}
+		if (healed == 0)
+			print("Everyone is already at full health");
 	}
 
 	return isDebuggerActive();
@@ -1293,6 +1371,28 @@ bool Debugger::cmdStats(int argc, const char **argv) {
 	eventHandler->pushController(&ctrl);
 	ctrl.waitFor();
 
+	// Print stats summary to the debug console
+	PartyMember *pm = g_context->_party->member(player);
+	const char *statusStr;
+	switch (pm->getStatus()) {
+	case STAT_GOOD:      statusStr = "Good";     break;
+	case STAT_POISONED:  statusStr = "Poisoned"; break;
+	case STAT_SLEEPING:  statusStr = "Sleeping"; break;
+	case STAT_DEAD:      statusStr = "Dead";     break;
+	default:             statusStr = "Unknown";  break;
+	}
+	print("--------------------------------");
+	print("%-16s  %s (%s)", pm->getName().c_str(),
+		getClassName(pm->getClass()), statusStr);
+	print("--------------------------------");
+	print("LVL: %-4d          XP: %d",  pm->getRealLevel(), pm->getExp());
+	print("STR: %-4d         DEX: %d",  pm->getStr(),       pm->getDex());
+	print("INT: %-4d          MP: %d/%d", pm->getInt(),     pm->getMp(), pm->getMaxMp());
+	print(" HP: %d/%d",                  pm->getHp(),       pm->getMaxHp());
+	print("  W: %s",  pm->getWeapon() ? pm->getWeapon()->getName().c_str() : "none");
+	print("  A: %s",  pm->getArmor()  ? pm->getArmor()->getName().c_str()  : "none");
+	print("--------------------------------");
+
 	return isDebuggerActive();
 }
 
@@ -1489,6 +1589,54 @@ bool Debugger::cmdDestroy(int argc, const char **argv) {
 bool Debugger::cmdDestroyCreatures(int argc, const char **argv) {
 	gameDestroyAllCreatures();
 	dontEndTurn();
+
+	return isDebuggerActive();
+}
+
+bool Debugger::cmdSlayCreatures(int argc, const char **argv) {
+	Map *map = g_context->_location->_map;
+
+	// Count living party members to split XP among
+	int partySize = g_context->_party->size();
+	int livingCount = 0;
+	for (int i = 0; i < partySize; ++i) {
+		if (g_context->_party->member(i)->getStatus() != STAT_DEAD)
+			++livingCount;
+	}
+	if (livingCount == 0)
+		livingCount = 1; // safety fallback
+
+	int slain = 0;
+	int totalXp = 0;
+
+	ObjectDeque::iterator current = map->_objects.begin();
+	while (current != map->_objects.end()) {
+		Creature *m = dynamic_cast<Creature *>(*current);
+		if (m && m->getId() != LORDBRITISH_ID && !isPartyMember(*current)) {
+			int xp = m->getXp();
+			if (m->isEvil())
+				g_context->_party->adjustKarma(KA_KILLED_EVIL);
+			current = map->removeObject(current);
+			// Award each living member an equal share
+			int share = xp / livingCount;
+			for (int i = 0; i < partySize; ++i) {
+				PartyMember *pm = g_context->_party->member(i);
+				if (pm->getStatus() != STAT_DEAD)
+					pm->awardXp(share);
+			}
+			totalXp += xp;
+			++slain;
+		} else {
+			++current;
+		}
+	}
+
+	if (slain == 0)
+		print("No creatures to slay");
+	else
+		print("Slew %d creature%s, gained %d XP (split among %d member%s)",
+			slain, slain == 1 ? "" : "s",
+			totalXp, livingCount, livingCount == 1 ? "" : "s");
 
 	return isDebuggerActive();
 }
@@ -1855,6 +2003,23 @@ bool Debugger::cmdTorch(int argc, const char **argv) {
 	return isDebuggerActive();
 }
 
+bool Debugger::cmdRepairShip(int argc, const char **argv) {
+	if (g_context->_transportContext != TRANSPORT_SHIP) {
+		print("Not on a ship");
+		return isDebuggerActive();
+	}
+
+	int hull = g_ultima->_saveGame->_shipHull;
+	if (hull >= 50) {
+		print("Ship hull is already at full strength (50)");
+	} else {
+		g_context->_party->setShipHull(50);
+		print("Ship hull repaired to full strength (50)");
+	}
+
+	return isDebuggerActive();
+}
+
 bool Debugger::cmdTransport(int argc, const char **argv) {
 	if (!g_context->_location->_map->isWorldMap()) {
 		print("Not here!");
@@ -2076,6 +2241,8 @@ bool Debugger::cmdHelp(int argc, const char **argv) {
 		{ "camp",            "camp",                                 "Camp/hole up (world map or dungeon, on foot only)" },
 		{ "cast",            "cast [player] [spell_letter]",         "Cast a spell; prompts interactively if args omitted" },
 		{ "climb",           "climb",                                "Climb portal or ascend balloon" },
+		{ "cure",            "cure [player]",                        "Cure poison for one player (index 0-N) or all if omitted" },
+		{ "heal",            "heal [player]",                        "Fully restore HP for one player (index 0-N) or all if omitted; dead members cannot be healed" },
 		{ "combat_speed",    "combat_speed <up|down|normal>",        "Adjust combat speed" },
 		{ "descend",         "descend",                              "Descend portal or land balloon" },
 		{ "enter",           "enter",                                "Enter portal (city, dungeon, etc.)" },
@@ -2111,6 +2278,7 @@ bool Debugger::cmdHelp(int argc, const char **argv) {
 		{ "companions",      "companions",                           "Recruit all available companions" },
 		{ "destroy",         "destroy <direction>",                  "Destroy object/enemy one tile ahead" },
 		{ "destroy_creatures","destroy_creatures",                   "Instantly kill all creatures on current map" },
+		{ "slay_creatures",  "slay_creatures",                       "Kill all creatures on current map, awarding XP and karma to the avatar for each kill" },
 		{ "down",            "down",                                 "Move down one dungeon floor; floors 0-7, fails at floor 7" },
 		{ "dungeon",         "dungeon <1-11>",                       "Teleport to dungeon 1-8 (main) or 9-11 (Deceit/Despise/Destard); world map only; enters at floor 7" },
 		{ "equipment",       "equipment",                            "Grant 8 of every equipment type, 99 consumable weapons" },
@@ -2132,7 +2300,8 @@ bool Debugger::cmdHelp(int argc, const char **argv) {
 		{ "summon",          "summon <creature_name>",               "Spawn a named creature for combat" },
 		{ "teleport",        "teleport <name|portal_num|label>",     "Alias for goto; portal 1-24 on world map" },
 		{ "torch",           "torch",                                "Display remaining torch duration" },
-		{ "transport",       "transport <s|h|b> [direction]",        "Spawn ship (s), horse (h), or balloon (b) in a direction" },
+		{ "transport",       "transport <s|h|b> [direction]",        "Spawn ship (s), horse (h), or balloon (b) in a direction; direction: north/up, south/down, east/right, west/left" },
+		{ "repair",          "repair",                               "Fully restore ship hull to maximum strength (50); must be aboard a ship" },
 		{ "triggers",        "triggers",                             "List dungeon room triggers (coordinates + tile replacements); combat only" },
 		{ "up",              "up",                                   "Move up one dungeon floor; floors 0-7, exits dungeon at floor 0" },
 		{ "virtue",          "virtue [1-8]",                         "No arg: set all virtues to max. With arg: improve that virtue by 10" },
