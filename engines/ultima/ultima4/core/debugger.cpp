@@ -181,6 +181,7 @@ Debugger::Debugger() : GUI::Debugger() {
 	registerCmd("companions", WRAP_METHOD(Debugger, cmdCompanions));
 	registerCmd("destroy", WRAP_METHOD(Debugger, cmdDestroy));
 	registerCmd("destroy_creatures", WRAP_METHOD(Debugger, cmdDestroyCreatures));
+	registerCmd("slay_creatures", WRAP_METHOD(Debugger, cmdSlayCreatures));
 	registerCmd("dungeon", WRAP_METHOD(Debugger, cmdDungeon));
 	registerCmd("equipment", WRAP_METHOD(Debugger, cmdEquipment));
 	registerCmd("exit", WRAP_METHOD(Debugger, cmdExit));
@@ -202,6 +203,7 @@ Debugger::Debugger() : GUI::Debugger() {
 	registerCmd("summon", WRAP_METHOD(Debugger, cmdSummon));
 	registerCmd("torch", WRAP_METHOD(Debugger, cmdTorch));
 	registerCmd("transport", WRAP_METHOD(Debugger, cmdTransport));
+	registerCmd("repair", WRAP_METHOD(Debugger, cmdRepairShip));
 	registerCmd("triggers", WRAP_METHOD(Debugger, cmdListTriggers));
 	registerCmd("up", WRAP_METHOD(Debugger, cmdUp));
 	registerCmd("down", WRAP_METHOD(Debugger, cmdDown));
@@ -1591,6 +1593,54 @@ bool Debugger::cmdDestroyCreatures(int argc, const char **argv) {
 	return isDebuggerActive();
 }
 
+bool Debugger::cmdSlayCreatures(int argc, const char **argv) {
+	Map *map = g_context->_location->_map;
+
+	// Count living party members to split XP among
+	int partySize = g_context->_party->size();
+	int livingCount = 0;
+	for (int i = 0; i < partySize; ++i) {
+		if (g_context->_party->member(i)->getStatus() != STAT_DEAD)
+			++livingCount;
+	}
+	if (livingCount == 0)
+		livingCount = 1; // safety fallback
+
+	int slain = 0;
+	int totalXp = 0;
+
+	ObjectDeque::iterator current = map->_objects.begin();
+	while (current != map->_objects.end()) {
+		Creature *m = dynamic_cast<Creature *>(*current);
+		if (m && m->getId() != LORDBRITISH_ID) {
+			int xp = m->getXp();
+			if (m->isEvil())
+				g_context->_party->adjustKarma(KA_KILLED_EVIL);
+			current = map->removeObject(current);
+			// Award each living member an equal share
+			int share = xp / livingCount;
+			for (int i = 0; i < partySize; ++i) {
+				PartyMember *pm = g_context->_party->member(i);
+				if (pm->getStatus() != STAT_DEAD)
+					pm->awardXp(share);
+			}
+			totalXp += xp;
+			++slain;
+		} else {
+			++current;
+		}
+	}
+
+	if (slain == 0)
+		print("No creatures to slay");
+	else
+		print("Slew %d creature%s, gained %d XP (split among %d member%s)",
+			slain, slain == 1 ? "" : "s",
+			totalXp, livingCount, livingCount == 1 ? "" : "s");
+
+	return isDebuggerActive();
+}
+
 bool Debugger::cmdDungeon(int argc, const char **argv) {
 	if (g_context->_location->_context & CTX_WORLDMAP) {
 		if (argc == 2) {
@@ -1953,6 +2003,23 @@ bool Debugger::cmdTorch(int argc, const char **argv) {
 	return isDebuggerActive();
 }
 
+bool Debugger::cmdRepairShip(int argc, const char **argv) {
+	if (g_context->_transportContext != TRANSPORT_SHIP) {
+		print("Not on a ship");
+		return isDebuggerActive();
+	}
+
+	int hull = g_ultima->_saveGame->_shipHull;
+	if (hull >= 50) {
+		print("Ship hull is already at full strength (50)");
+	} else {
+		g_context->_party->setShipHull(50);
+		print("Ship hull repaired to full strength (50)");
+	}
+
+	return isDebuggerActive();
+}
+
 bool Debugger::cmdTransport(int argc, const char **argv) {
 	if (!g_context->_location->_map->isWorldMap()) {
 		print("Not here!");
@@ -2211,6 +2278,7 @@ bool Debugger::cmdHelp(int argc, const char **argv) {
 		{ "companions",      "companions",                           "Recruit all available companions" },
 		{ "destroy",         "destroy <direction>",                  "Destroy object/enemy one tile ahead" },
 		{ "destroy_creatures","destroy_creatures",                   "Instantly kill all creatures on current map" },
+		{ "slay_creatures",  "slay_creatures",                       "Kill all creatures on current map, awarding XP and karma to the avatar for each kill" },
 		{ "down",            "down",                                 "Move down one dungeon floor; floors 0-7, fails at floor 7" },
 		{ "dungeon",         "dungeon <1-11>",                       "Teleport to dungeon 1-8 (main) or 9-11 (Deceit/Despise/Destard); world map only; enters at floor 7" },
 		{ "equipment",       "equipment",                            "Grant 8 of every equipment type, 99 consumable weapons" },
@@ -2233,6 +2301,7 @@ bool Debugger::cmdHelp(int argc, const char **argv) {
 		{ "teleport",        "teleport <name|portal_num|label>",     "Alias for goto; portal 1-24 on world map" },
 		{ "torch",           "torch",                                "Display remaining torch duration" },
 		{ "transport",       "transport <s|h|b> [direction]",        "Spawn ship (s), horse (h), or balloon (b) in a direction" },
+		{ "repair",          "repair",                               "Fully restore ship hull to maximum strength (50); must be aboard a ship" },
 		{ "triggers",        "triggers",                             "List dungeon room triggers (coordinates + tile replacements); combat only" },
 		{ "up",              "up",                                   "Move up one dungeon floor; floors 0-7, exits dungeon at floor 0" },
 		{ "virtue",          "virtue [1-8]",                         "No arg: set all virtues to max. With arg: improve that virtue by 10" },

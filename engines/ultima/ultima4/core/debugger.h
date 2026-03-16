@@ -113,6 +113,16 @@ private:
 	bool cmdHeal(int argc, const char **argv);
 
 	/**
+	 * Slay all creatures on the map, awarding XP for each kill
+	 */
+	bool cmdSlayCreatures(int argc, const char **argv);
+
+	/**
+	 * Fully repair the ship hull to maximum
+	 */
+	bool cmdRepairShip(int argc, const char **argv);
+
+	/**
 	 * Climb
 	 */
 	bool cmdClimb(int argc, const char **argv);
