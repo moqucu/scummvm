@@ -144,6 +144,8 @@ Debugger::Debugger() : GUI::Debugger() {
 	registerCmd("camp", WRAP_METHOD(Debugger, cmdCamp));
 	registerCmd("cast", WRAP_METHOD(Debugger, cmdCastSpell));
 	registerCmd("spell", WRAP_METHOD(Debugger, cmdCastSpell));
+	registerCmd("cure", WRAP_METHOD(Debugger, cmdCure));
+	registerCmd("heal", WRAP_METHOD(Debugger, cmdHeal));
 	registerCmd("climb", WRAP_METHOD(Debugger, cmdClimb));
 	registerCmd("descend", WRAP_METHOD(Debugger, cmdDescend));
 	registerCmd("enter", WRAP_METHOD(Debugger, cmdEnter));
@@ -710,6 +712,80 @@ bool Debugger::cmdFire(int argc, const char **argv) {
 	for (const auto &coords : path) {
 		if (fireAt(coords, true))
 			return isDebuggerActive();
+	}
+
+	return isDebuggerActive();
+}
+
+bool Debugger::cmdCure(int argc, const char **argv) {
+	if (argc == 2) {
+		// Cure a single player by index
+		int player = strToInt(argv[1]);
+		if (player < 0 || player >= g_context->_party->size()) {
+			print("Invalid player: %d (party has %d member%s, index 0-%d)",
+				player, g_context->_party->size(),
+				g_context->_party->size() == 1 ? "" : "s",
+				g_context->_party->size() - 1);
+			return isDebuggerActive();
+		}
+		PartyMember *pm = g_context->_party->member(player);
+		if (pm->getStatus() != STAT_POISONED) {
+			print("%s is not poisoned", pm->getName().c_str());
+		} else {
+			pm->heal(HT_CURE);
+			print("%s cured", pm->getName().c_str());
+		}
+	} else {
+		// Cure all poisoned party members
+		int cured = 0;
+		for (int i = 0; i < g_context->_party->size(); ++i) {
+			PartyMember *pm = g_context->_party->member(i);
+			if (pm->getStatus() == STAT_POISONED) {
+				pm->heal(HT_CURE);
+				print("%s cured", pm->getName().c_str());
+				++cured;
+			}
+		}
+		if (cured == 0)
+			print("No one is poisoned");
+	}
+
+	return isDebuggerActive();
+}
+
+bool Debugger::cmdHeal(int argc, const char **argv) {
+	if (argc == 2) {
+		// Heal a single player by index
+		int player = strToInt(argv[1]);
+		if (player < 0 || player >= g_context->_party->size()) {
+			print("Invalid player: %d (party has %d member%s, index 0-%d)",
+				player, g_context->_party->size(),
+				g_context->_party->size() == 1 ? "" : "s",
+				g_context->_party->size() - 1);
+			return isDebuggerActive();
+		}
+		PartyMember *pm = g_context->_party->member(player);
+		if (pm->getStatus() == STAT_DEAD) {
+			print("%s is dead and cannot be healed", pm->getName().c_str());
+		} else if (!pm->heal(HT_FULLHEAL)) {
+			print("%s is already at full health", pm->getName().c_str());
+		} else {
+			print("%s fully healed", pm->getName().c_str());
+		}
+	} else {
+		// Heal all living party members
+		int healed = 0;
+		for (int i = 0; i < g_context->_party->size(); ++i) {
+			PartyMember *pm = g_context->_party->member(i);
+			if (pm->getStatus() == STAT_DEAD) {
+				print("%s is dead and cannot be healed", pm->getName().c_str());
+			} else if (pm->heal(HT_FULLHEAL)) {
+				print("%s fully healed", pm->getName().c_str());
+				++healed;
+			}
+		}
+		if (healed == 0)
+			print("Everyone is already at full health");
 	}
 
 	return isDebuggerActive();
@@ -1292,6 +1368,28 @@ bool Debugger::cmdStats(int argc, const char **argv) {
 	ZtatsController ctrl;
 	eventHandler->pushController(&ctrl);
 	ctrl.waitFor();
+
+	// Print stats summary to the debug console
+	PartyMember *pm = g_context->_party->member(player);
+	const char *statusStr;
+	switch (pm->getStatus()) {
+	case STAT_GOOD:      statusStr = "Good";     break;
+	case STAT_POISONED:  statusStr = "Poisoned"; break;
+	case STAT_SLEEPING:  statusStr = "Sleeping"; break;
+	case STAT_DEAD:      statusStr = "Dead";     break;
+	default:             statusStr = "Unknown";  break;
+	}
+	print("--------------------------------");
+	print("%-16s  %s (%s)", pm->getName().c_str(),
+		getClassName(pm->getClass()), statusStr);
+	print("--------------------------------");
+	print("LVL: %-4d          XP: %d",  pm->getRealLevel(), pm->getExp());
+	print("STR: %-4d         DEX: %d",  pm->getStr(),       pm->getDex());
+	print("INT: %-4d          MP: %d/%d", pm->getInt(),     pm->getMp(), pm->getMaxMp());
+	print(" HP: %d/%d",                  pm->getHp(),       pm->getMaxHp());
+	print("  W: %s",  pm->getWeapon() ? pm->getWeapon()->getName().c_str() : "none");
+	print("  A: %s",  pm->getArmor()  ? pm->getArmor()->getName().c_str()  : "none");
+	print("--------------------------------");
 
 	return isDebuggerActive();
 }
@@ -2076,6 +2174,8 @@ bool Debugger::cmdHelp(int argc, const char **argv) {
 		{ "camp",            "camp",                                 "Camp/hole up (world map or dungeon, on foot only)" },
 		{ "cast",            "cast [player] [spell_letter]",         "Cast a spell; prompts interactively if args omitted" },
 		{ "climb",           "climb",                                "Climb portal or ascend balloon" },
+		{ "cure",            "cure [player]",                        "Cure poison for one player (index 0-N) or all if omitted" },
+		{ "heal",            "heal [player]",                        "Fully restore HP for one player (index 0-N) or all if omitted; dead members cannot be healed" },
 		{ "combat_speed",    "combat_speed <up|down|normal>",        "Adjust combat speed" },
 		{ "descend",         "descend",                              "Descend portal or land balloon" },
 		{ "enter",           "enter",                                "Enter portal (city, dungeon, etc.)" },

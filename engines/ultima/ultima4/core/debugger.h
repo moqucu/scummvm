@@ -103,6 +103,16 @@ private:
 	bool cmdCastSpell(int argc, const char **argv);
 
 	/**
+	 * Cure poison for one or all party members
+	 */
+	bool cmdCure(int argc, const char **argv);
+
+	/**
+	 * Fully heal one or all party members
+	 */
+	bool cmdHeal(int argc, const char **argv);
+
+	/**
 	 * Climb
 	 */
 	bool cmdClimb(int argc, const char **argv);
