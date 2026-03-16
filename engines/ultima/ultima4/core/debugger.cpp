@@ -1612,7 +1612,7 @@ bool Debugger::cmdSlayCreatures(int argc, const char **argv) {
 	ObjectDeque::iterator current = map->_objects.begin();
 	while (current != map->_objects.end()) {
 		Creature *m = dynamic_cast<Creature *>(*current);
-		if (m && m->getId() != LORDBRITISH_ID) {
+		if (m && m->getId() != LORDBRITISH_ID && !isPartyMember(*current)) {
 			int xp = m->getXp();
 			if (m->isEvil())
 				g_context->_party->adjustKarma(KA_KILLED_EVIL);
@@ -2300,7 +2300,7 @@ bool Debugger::cmdHelp(int argc, const char **argv) {
 		{ "summon",          "summon <creature_name>",               "Spawn a named creature for combat" },
 		{ "teleport",        "teleport <name|portal_num|label>",     "Alias for goto; portal 1-24 on world map" },
 		{ "torch",           "torch",                                "Display remaining torch duration" },
-		{ "transport",       "transport <s|h|b> [direction]",        "Spawn ship (s), horse (h), or balloon (b) in a direction" },
+		{ "transport",       "transport <s|h|b> [direction]",        "Spawn ship (s), horse (h), or balloon (b) in a direction; direction: north/up, south/down, east/right, west/left" },
 		{ "repair",          "repair",                               "Fully restore ship hull to maximum strength (50); must be aboard a ship" },
 		{ "triggers",        "triggers",                             "List dungeon room triggers (coordinates + tile replacements); combat only" },
 		{ "up",              "up",                                   "Move up one dungeon floor; floors 0-7, exits dungeon at floor 0" },
