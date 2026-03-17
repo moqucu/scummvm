@@ -59,13 +59,13 @@ bool MapCoords::operator<(const MapCoords &a)  const {
 MapCoords &MapCoords::wrap(const Map *map) {
 	if (map && map->_borderBehavior == Map::BORDER_WRAP) {
 		while (x < 0)
-			x += map->_width;
+			x += (int)map->_width;
 		while (y < 0)
-			y += map->_height;
+			y += (int)map->_height;
 		while (x >= (int)map->_width)
-			x -= map->_width;
+			x -= (int)map->_width;
 		while (y >= (int)map->_height)
-			y -= map->_height;
+			y -= (int)map->_height;
 	}
 	return *this;
 }
@@ -74,16 +74,16 @@ MapCoords &MapCoords::putInBounds(const Map *map) {
 	if (map) {
 		if (x < 0)
 			x = 0;
-		if (x >= (int) map->_width)
-			x = map->_width - 1;
+		if (x >= (int)map->_width)
+			x = (int)map->_width - 1;
 		if (y < 0)
 			y = 0;
-		if (y >= (int) map->_height)
-			y = map->_height - 1;
+		if (y >= (int)map->_height)
+			y = (int)map->_height - 1;
 		if (z < 0)
 			z = 0;
-		if (z >= (int) map->_levels)
-			z = map->_levels - 1;
+		if (z >= (int)map->_levels)
+			z = (int)map->_levels - 1;
 	}
 	return *this;
 }
@@ -133,15 +133,15 @@ int MapCoords::getRelativeDirection(const MapCoords &c, const Map *map) const {
 	if (map && map->_borderBehavior == Map::BORDER_WRAP) {
 		MapCoords me = *this;
 
-		if (abs(int(me.x - c.x)) > abs(int(me.x + map->_width - c.x)))
-			me.x += map->_width;
-		else if (abs(int(me.x - c.x)) > abs(int(me.x - map->_width - c.x)))
-			me.x -= map->_width;
+		if (abs(int(me.x - c.x)) > abs(int(me.x + (int)map->_width - c.x)))
+			me.x += (int)map->_width;
+		else if (abs(int(me.x - c.x)) > abs(int(me.x - (int)map->_width - c.x)))
+			me.x -= (int)map->_width;
 
-		if (abs(int(me.y - c.y)) > abs(int(me.y + map->_width - c.y)))
-			me.y += map->_height;
-		else if (abs(int(me.y - c.y)) > abs(int(me.y - map->_width - c.y)))
-			me.y -= map->_height;
+		if (abs(int(me.y - c.y)) > abs(int(me.y + (int)map->_width - c.y)))
+			me.y += (int)map->_height;
+		else if (abs(int(me.y - c.y)) > abs(int(me.y - (int)map->_width - c.y)))
+			me.y -= (int)map->_height;
 
 		dx = me.x - c.x;
 		dy = me.y - c.y;
@@ -475,6 +475,22 @@ Creature *Map::moveObjects(MapCoords avatar) {
 				}
 			}
 		}
+	}
+
+	// Validate that attacker is still alive: a creature's specialAction()
+	// (e.g. pirate cannon, sea serpent fireblast) can kill and delete another
+	// creature during this same loop, leaving 'attacker' as a dangling pointer.
+	// Check that the pointer is still present in _objects before returning it.
+	if (attacker) {
+		bool found = false;
+		for (auto *obj : _objects) {
+			if (obj == attacker) {
+				found = true;
+				break;
+			}
+		}
+		if (!found)
+			attacker = nullptr;
 	}
 
 	return attacker;
