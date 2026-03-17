@@ -27,7 +27,6 @@
 #include "ultima/ultima4/map/location.h"
 #include "ultima/ultima4/map/movement.h"
 #include "ultima/ultima4/game/object.h"
-#include "ultima/ultima4/game/person.h"
 #include "ultima/ultima4/game/player.h"
 #include "ultima/ultima4/game/portal.h"
 #include "ultima/ultima4/filesys/savegame.h"
@@ -35,7 +34,6 @@
 #include "ultima/ultima4/map/tilemap.h"
 #include "ultima/ultima4/core/types.h"
 #include "ultima/ultima4/core/utils.h"
-#include "ultima/ultima4/core/settings.h"
 
 namespace Ultima {
 namespace Ultima4 {
@@ -255,13 +253,9 @@ Object *Map::objectAt(const Coords &coords) {
 		Object *obj = *i;
 
 		if (obj->getCoords() == coords) {
-			// Get the most visible object
-			if (objAt && (objAt->getType() == Object::UNKNOWN) && (obj->getType() != Object::UNKNOWN))
-				objAt = obj;
-			// Give priority to objects that have the focus
-			else if (objAt && (!objAt->hasFocus()) && (obj->hasFocus()))
-				objAt = obj;
-			else if (!objAt)
+			if (!objAt ||
+			        (objAt->getType() == Object::UNKNOWN && obj->getType() != Object::UNKNOWN) ||
+			        (!objAt->hasFocus() && obj->hasFocus()))
 				objAt = obj;
 		}
 	}
@@ -283,7 +277,7 @@ MapTile *Map::getTileFromData(const Coords &coords) {
 	if (MAP_IS_OOB(this, coords))
 		return &_blank;
 
-	int index = coords.x + (coords.y * _width) + (_width * _height * coords.z);
+	int index = coords.x + (coords.y * (int)_width) + ((int)_width * (int)_height * coords.z);
 	return &_data[index];
 }
 
@@ -304,11 +298,8 @@ MapTile *Map::tileAt(const Coords &coords, int withObjects) {
 		}
 	}
 
-	if ((withObjects == WITH_OBJECTS) && obj)
-		tile = &obj->getTile();
-	else if ((withObjects == WITH_GROUND_OBJECTS) &&
-	         obj &&
-	         obj->getTile().getTileType()->isWalkable())
+	if (obj && ((withObjects == WITH_OBJECTS) ||
+	        (withObjects == WITH_GROUND_OBJECTS && obj->getTile().getTileType()->isWalkable())))
 		tile = &obj->getTile();
 
 	return tile;
@@ -339,13 +330,13 @@ bool Map::isEnclosed(const Coords &party) {
 	// Find two connecting pathways where the avatar can reach both without wrapping
 	for (x = 0; x < _width; x++) {
 		int index = x;
-		if (path_data[index] == 2 && path_data[index + ((_height - 1)*_width)] == 2)
+		if (path_data[index] == 2 && path_data[index + ((int)(_height - 1) * (int)_width)] == 2)
 			return false;
 	}
 
 	for (y = 0; y < _width; y++) {
-		int index = (y * _width);
-		if (path_data[index] == 2 && path_data[index + _width - 1] == 2)
+		int index = (int)y * (int)_width;
+		if (path_data[index] == 2 && path_data[index + (int)_width - 1] == 2)
 			return false;
 	}
 
@@ -354,19 +345,19 @@ bool Map::isEnclosed(const Coords &party) {
 
 void Map::findWalkability(Coords coords, int *path_data) {
 	const Tile *mt = tileTypeAt(coords, WITHOUT_OBJECTS);
-	int index = coords.x + (coords.y * _width);
+	int index = coords.x + coords.y * (int)_width;
 
 	if (mt->isWalkable()) {
 		bool isBorderTile = (coords.x == 0) || (coords.x == signed(_width - 1)) || (coords.y == 0) || (coords.y == signed(_height - 1));
 		path_data[index] = isBorderTile ? 2 : 1;
 
-		if ((coords.x > 0) && path_data[coords.x - 1 + (coords.y * _width)] < 0)
+		if ((coords.x > 0) && path_data[coords.x - 1 + coords.y * (int)_width] < 0)
 			findWalkability(Coords(coords.x - 1, coords.y, coords.z), path_data);
-		if ((coords.x < signed(_width - 1)) && path_data[coords.x + 1 + (coords.y * _width)] < 0)
+		if ((coords.x < signed(_width - 1)) && path_data[coords.x + 1 + coords.y * (int)_width] < 0)
 			findWalkability(Coords(coords.x + 1, coords.y, coords.z), path_data);
-		if ((coords.y > 0) && path_data[coords.x + ((coords.y - 1) * _width)] < 0)
+		if ((coords.y > 0) && path_data[coords.x + (coords.y - 1) * (int)_width] < 0)
 			findWalkability(Coords(coords.x, coords.y - 1, coords.z), path_data);
-		if ((coords.y < signed(_height - 1)) && path_data[coords.x + ((coords.y + 1) * _width)] < 0)
+		if ((coords.y < signed(_height - 1)) && path_data[coords.x + (coords.y + 1) * (int)_width] < 0)
 			findWalkability(Coords(coords.x, coords.y + 1, coords.z), path_data);
 	} else {
 		path_data[index] = 0;
@@ -602,11 +593,9 @@ int Map::getValidMoves(MapCoords from, MapTile transport) {
 
 		// Avatar movement
 		if (isAvatar) {
-			// if the transport is a ship, check sailable
-			if (transport.getTileType()->isShip() && tile.getTileType()->isSailable())
-				retval = DIR_ADD_TO_MASK(d, retval);
-			// if it is a balloon, check flyable
-			else if (transport.getTileType()->isBalloon() && tile.getTileType()->isFlyable())
+			// if the transport is a ship, check sailable; if a balloon, check flyable
+			if ((transport.getTileType()->isShip() && tile.getTileType()->isSailable()) ||
+			        (transport.getTileType()->isBalloon() && tile.getTileType()->isFlyable()))
 				retval = DIR_ADD_TO_MASK(d, retval);
 			// avatar or horseback: check walkable
 			else if (transport == _tileSet->getByName("avatar")->getId() || transport.getTileType()->isHorse()) {
@@ -625,11 +614,10 @@ int Map::getValidMoves(MapCoords from, MapTile transport) {
 			// Flying creatures
 			if (tile.getTileType()->isFlyable() && m->flies()) {
 				// FIXME: flying creatures behave differently on the world map?
-				if (isWorldMap())
-					retval = DIR_ADD_TO_MASK(d, retval);
-				else if (tile.getTileType()->isWalkable() ||
-				         tile.getTileType()->isSwimable() ||
-				         tile.getTileType()->isSailable())
+				if (isWorldMap() ||
+				        tile.getTileType()->isWalkable() ||
+				        tile.getTileType()->isSwimable() ||
+				        tile.getTileType()->isSailable())
 					retval = DIR_ADD_TO_MASK(d, retval);
 			}
 			// Swimming creatures and sailing creatures
